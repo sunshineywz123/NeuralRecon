@@ -10,6 +10,8 @@ def sync_intrinsics_and_poses(cam_file, pose_file, out_file):
     
     cam_intrinsics = []
     for line in cam_intrinsic_lines:
+        if line[0] == '#':
+            continue
         line_data_list = line.split(',')
         if len(line_data_list) == 0:
             continue
@@ -22,6 +24,8 @@ def sync_intrinsics_and_poses(cam_file, pose_file, out_file):
 
     cam_poses = []
     for line in cam_pose_lines:
+        if line[0] == '#':
+            continue
         line_data_list = line.split(',')
         if len(line_data_list) == 0:
             continue

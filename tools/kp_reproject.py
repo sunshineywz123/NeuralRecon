@@ -126,6 +126,8 @@ def load_camera_intrinsic(cam_file, data_source='TagBA'):
 
         cam_intrinsic_dict = dict()
         for line in cam_intrinsic_lines:
+            if line[0] == '#':
+                continue
             line_data_list = [float(i) for i in line.split(',')]
             if len(line_data_list) == 0:
                 continue

@@ -2,11 +2,13 @@ import os
 import pickle
 from tqdm import tqdm
 
+# import ipdb;ipdb.set_trace()
 from tools.kp_reproject import *
 from tools.sync_poses import *
 
 # params
-project_path = '/home/sunjiaming/Repositories/NeuralFusion/data/neucon_demo/phone_room_0'
+# project_path = '/home/sunjiaming/Repositories/NeuralFusion/data/neucon_demo/phone_room_0'
+project_path = '/nas/users/yuanweizhong/NeuralRecon/data/0307-pikaqiu-gtx-annotate/'
 # project_path = '/home/sunjiaming/Repositories/NeuralFusion/data/neucon_demo/conf_0'
 
 def process_data(data_path, data_source='ARKit', window_size=9, min_angle=15, min_distance=0.1, ori_size=(1920, 1440), size=(640, 480)):

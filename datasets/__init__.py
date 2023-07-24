@@ -9,3 +9,5 @@ def find_dataset_def(dataset_name):
         return getattr(module, "ScanNetDataset")
     elif dataset_name == 'demo':
         return getattr(module, "DemoDataset")
+    elif dataset_name == 'OmniObject3D':
+        return getattr(module, "OmniObject3DDataset")

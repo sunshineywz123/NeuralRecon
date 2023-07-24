@@ -9,14 +9,17 @@ from tqdm import tqdm
 import ray
 import torch.multiprocessing
 from tools.simple_loader import *
+from tools.simple_loader_OmniObject3D import *
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
+import ipdb
+import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Fuse ground truth tsdf')
-    parser.add_argument("--dataset", default='scannet')
+    parser.add_argument("--dataset", default='OmniObject3D')
     parser.add_argument("--data_path", metavar="DIR",
                         help="path to raw dataset", default='/data/scannet/output/')
     parser.add_argument("--save_name", metavar="DIR",
@@ -27,15 +30,16 @@ def parse_args():
                         help='mask out large depth values since they are noisy')
     parser.add_argument('--num_layers', default=3, type=int)
     parser.add_argument('--margin', default=3, type=int)
-    parser.add_argument('--voxel_size', default=0.04, type=float)
+    # parser.add_argument('--voxel_size', default=0.04, type=float)
+    parser.add_argument('--voxel_size', default=0.4, type=float)
 
     parser.add_argument('--window_size', default=9, type=int)
     parser.add_argument('--min_angle', default=15, type=float)
     parser.add_argument('--min_distance', default=0.1, type=float)
 
     # ray multi processes
-    parser.add_argument('--n_proc', type=int, default=16, help='#processes launched to process scenes.')
-    parser.add_argument('--n_gpu', type=int, default=2, help='#number of gpus')
+    parser.add_argument('--n_proc', type=int, default=8, help='#processes launched to process scenes.')
+    parser.add_argument('--n_gpu', type=int, default=1, help='#number of gpus')
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--loader_num_workers', type=int, default=8)
     return parser.parse_args()
@@ -75,6 +79,7 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
     # Initialize voxel volume
     print("Initializing voxel volume...")
     tsdf_vol_list = []
+    # import ipdb;ipdb.set_trace()
     for l in range(args.num_layers):
         tsdf_vol_list.append(TSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
 
@@ -194,10 +199,13 @@ def save_fragment_pkl(args, scene, cam_intr, depth_list, cam_pose_list):
 
 
 @ray.remote(num_cpus=args.num_workers + 1, num_gpus=(1 / args.n_proc))
+def process_with_single_worker_warpper(args, scannet_files):
+    process_with_single_worker(args, scannet_files)
+    
 def process_with_single_worker(args, scannet_files):
     for scene in tqdm(scannet_files):
-        if os.path.exists(os.path.join(args.save_path, scene, 'fragments.pkl')):
-            continue
+        # if os.path.exists(os.path.join(args.save_path, scene, 'fragments.pkl')):
+        #     continue
         print('read from disk')
 
         depth_all = {}
@@ -209,11 +217,20 @@ def process_with_single_worker(args, scannet_files):
             intrinsic_dir = os.path.join(args.data_path, scene, 'intrinsic', 'intrinsic_depth.txt')
             cam_intr = np.loadtxt(intrinsic_dir, delimiter=' ')[:3, :3]
             dataset = ScanNetDataset(n_imgs, scene, args.data_path, args.max_depth)
-
+        if args.dataset == 'OmniObject3D':
+            # import ipdb;ipdb.set_trace()
+            n_imgs = len(os.listdir(os.path.join(args.data_path, scene, 'render/images')))
+            # intrinsic_dir = os.path.join(args.data_path, scene, 'intrinsic', 'intrinsic_depth.txt')
+            # cam_intr = np.loadtxt(intrinsic_dir, delimiter=' ')[:3, :3]
+            dataset = OmniObject3DDataset(n_imgs, scene, args.data_path, args.max_depth)
+            cam_intr = dataset.cam_intr
+        
+        args.loader_num_worker = 0
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=None, collate_fn=collate_fn,
                                                  batch_sampler=None, num_workers=args.loader_num_workers)
-
+        # import ipdb;ipdb.set_trace()
         for id, (cam_pose, depth_im, _) in enumerate(dataloader):
+            # import ipdb;ipdb.set_trace()
             if id % 100 == 0:
                 print("{}: read frame {}/{}".format(scene, str(id), str(n_imgs)))
 
@@ -247,8 +264,9 @@ def generate_pkl(args):
         with open(os.path.join(args.save_path, 'splits', 'scannetv2_{}.txt'.format(split))) as f:
             split_files = f.readlines()
         for scene in all_scenes:
-            if 'scene' not in scene:
-                continue
+            # import ipdb;ipdb.set_trace()
+            # if 'scene' not in scene:
+            #     continue
             if scene + '\n' in split_files:
                 with open(os.path.join(args.save_path, scene, 'fragments.pkl'), 'rb') as f:
                     frag_scene = pickle.load(f)
@@ -260,14 +278,24 @@ def generate_pkl(args):
 
 if __name__ == "__main__":
     all_proc = args.n_proc * args.n_gpu
-
-    ray.init(num_cpus=all_proc * (args.num_workers + 1), num_gpus=args.n_gpu)
+    import shutil 
+    # shutil.rmtree("/tmp/ray")
+    # ray.init(num_cpus=all_proc * (args.num_workers + 1), num_gpus=args.n_gpu,_temp_dir="/tmp/ray2",local_mode=True)
+    # ray.init(num_cpus=all_proc * (args.num_workers + 1), num_gpus=args.n_gpu,_temp_dir="/tmp/ray2")
 
     if args.dataset == 'scannet':
         if not args.test:
             args.data_path = os.path.join(args.data_path, 'scans')
         else:
             args.data_path = os.path.join(args.data_path, 'scans_test')
+        ipdb.set_trace()
+        files = sorted(os.listdir(args.data_path))
+    elif args.dataset == 'OmniObject3D' :
+        if not args.test:
+            args.data_path = os.path.join(args.data_path, 'scans')
+        else:
+            args.data_path = os.path.join(args.data_path, 'scans_test')
+        # ipdb.set_trace()
         files = sorted(os.listdir(args.data_path))
     else:
         raise NameError('error!')
@@ -276,9 +304,15 @@ if __name__ == "__main__":
 
     ray_worker_ids = []
     for w_idx in range(all_proc):
-        ray_worker_ids.append(process_with_single_worker.remote(args, files[w_idx]))
+        # ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
+        ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
 
-    results = ray.get(ray_worker_ids)
-
-    if args.dataset == 'scannet':
-        generate_pkl(args)
+    # results = ray.get(ray_worker_ids)
+    try:
+        if args.dataset == 'scannet':
+            generate_pkl(args)
+        else:
+            generate_pkl(args)
+    except:
+       type, value, traceback = sys.exc_info()
+       ipdb.post_mortem(traceback)
