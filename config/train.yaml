@@ -1,4 +1,4 @@
-DATASET: 'OmniObject3D'
+DATASET: 'Colmap'
 BATCH_SIZE: 1
 SAVE_SCENE_MESH: False
 LOGDIR: './checkpoints'
@@ -6,7 +6,7 @@ SAVE_FREQ: 1
 MODE: 'train'
 
 TRAIN:
-  PATH: 'data/antique'
+  PATH: 'data/皮卡丘大占比对齐/'
   EPOCHS: 991
   N_VIEWS: 9
   LR: 1e-3

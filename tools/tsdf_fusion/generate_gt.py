@@ -10,9 +10,12 @@ import ray
 import torch.multiprocessing
 from tools.simple_loader import *
 from tools.simple_loader_OmniObject3D import *
+from tools.simple_loader_colmap import *
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+import os
+from fusion import meshwrite
 
 import ipdb
 import sys
@@ -26,12 +29,15 @@ def parse_args():
                         help="file name", default='all_tsdf')
     parser.add_argument('--test', action='store_true',
                         help='prepare the test set')
-    parser.add_argument('--max_depth', default=3., type=float,
-                        help='mask out large depth values since they are noisy')
+    # parser.add_argument('--max_depth', default=0.5, type=float,
+    #                     help='mask out large depth values since they are noisy')
+    parser.add_argument('--max_depth', default=4.1, type=float,
+                    help='mask out large depth values since they are noisy')
+    
     parser.add_argument('--num_layers', default=3, type=int)
     parser.add_argument('--margin', default=3, type=int)
+    parser.add_argument('--voxel_size', default=0.008, type=float)
     # parser.add_argument('--voxel_size', default=0.04, type=float)
-    parser.add_argument('--voxel_size', default=0.4, type=float)
 
     parser.add_argument('--window_size', default=9, type=int)
     parser.add_argument('--min_angle', default=15, type=float)
@@ -46,7 +52,11 @@ def parse_args():
 
 
 args = parse_args()
-args.save_path = os.path.join(args.data_path, args.save_name)
+
+# outpath = args.data_path+'/outputs/'+ args.save_name
+# args.save_path = os.path.join(outpath)
+
+args.save_path = os.path.join(args.data_path,args.save_name)
 
 
 def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_list, save_mesh=False):
@@ -71,6 +81,7 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
         view_frust_pts = get_view_frustum(depth_im, cam_intr, cam_pose)
         vol_bnds[:, 0] = np.minimum(vol_bnds[:, 0], np.amin(view_frust_pts, axis=1))
         vol_bnds[:, 1] = np.maximum(vol_bnds[:, 1], np.amax(view_frust_pts, axis=1))
+    # import ipdb;ipdb.set_trace()
     # ======================================================================================================== #
 
     # ======================================================================================================== #
@@ -106,6 +117,8 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
         'vol_origin': tsdf_vol_list[0]._vol_origin,
         'voxel_size': tsdf_vol_list[0]._voxel_size,
     }
+    # import ipdb;ipdb.set_trace()
+
     tsdf_path = os.path.join(args.save_path, scene_path)
     if not os.path.exists(tsdf_path):
         os.makedirs(tsdf_path)
@@ -117,6 +130,7 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
         tsdf_vol, color_vol, weight_vol = tsdf_vol_list[l].get_volume()
         np.savez_compressed(os.path.join(args.save_path, scene_path, 'full_tsdf_layer{}'.format(str(l))), tsdf_vol)
 
+    # import ipdb;ipdb.set_trace()
     if save_mesh:
         for l in range(args.num_layers):
             print("Saving mesh to mesh{}.ply...".format(str(l)))
@@ -224,7 +238,14 @@ def process_with_single_worker(args, scannet_files):
             # cam_intr = np.loadtxt(intrinsic_dir, delimiter=' ')[:3, :3]
             dataset = OmniObject3DDataset(n_imgs, scene, args.data_path, args.max_depth)
             cam_intr = dataset.cam_intr
-        
+        if args.dataset == 'Colmap':
+            # import ipdb;ipdb.set_trace()
+            n_imgs = len(os.listdir(os.path.join(args.data_path, scene, 'depths')))
+            # intrinsic_dir = os.path.join(args.data_path, scene, 'intrinsic', 'intrinsic_depth.txt')
+            # cam_intr = np.loadtxt(intrinsic_dir, delimiter=' ')[:3, :3]
+            dataset = ColmapDataset(n_imgs, scene, args.data_path, args.max_depth)
+            cam_intr = dataset.cam_intr
+            
         args.loader_num_worker = 0
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=None, collate_fn=collate_fn,
                                                  batch_sampler=None, num_workers=args.loader_num_workers)
@@ -241,6 +262,7 @@ def process_with_single_worker(args, scannet_files):
             # color_all.update({id: color_image})
 
         save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=False)
+        # save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=True)
         save_fragment_pkl(args, scene, cam_intr, depth_all, cam_pose_all)
 
 
@@ -263,11 +285,13 @@ def generate_pkl(args):
         fragments = []
         with open(os.path.join(args.save_path, 'splits', 'scannetv2_{}.txt'.format(split))) as f:
             split_files = f.readlines()
+        # import ipdb;ipdb.set_trace()
         for scene in all_scenes:
             # import ipdb;ipdb.set_trace()
             # if 'scene' not in scene:
             #     continue
-            if scene + '\n' in split_files:
+            # if scene + '\n' in split_files:
+            if scene in split_files:
                 with open(os.path.join(args.save_path, scene, 'fragments.pkl'), 'rb') as f:
                     frag_scene = pickle.load(f)
                 fragments.extend(frag_scene)
@@ -278,6 +302,7 @@ def generate_pkl(args):
 
 if __name__ == "__main__":
     all_proc = args.n_proc * args.n_gpu
+    all_proc = 1
     import shutil 
     # shutil.rmtree("/tmp/ray")
     # ray.init(num_cpus=all_proc * (args.num_workers + 1), num_gpus=args.n_gpu,_temp_dir="/tmp/ray2",local_mode=True)
@@ -288,7 +313,7 @@ if __name__ == "__main__":
             args.data_path = os.path.join(args.data_path, 'scans')
         else:
             args.data_path = os.path.join(args.data_path, 'scans_test')
-        ipdb.set_trace()
+        # ipdb.set_trace()
         files = sorted(os.listdir(args.data_path))
     elif args.dataset == 'OmniObject3D' :
         if not args.test:
@@ -297,18 +322,38 @@ if __name__ == "__main__":
             args.data_path = os.path.join(args.data_path, 'scans_test')
         # ipdb.set_trace()
         files = sorted(os.listdir(args.data_path))
+    elif args.dataset == 'Colmap' :
+        if not args.test:
+            args.data_path = os.path.join(args.data_path, 'scans')
+        else:
+            args.data_path = os.path.join(args.data_path, 'scans_test')
+        # ipdb.set_trace()
+        files = sorted(os.listdir(args.data_path))
     else:
         raise NameError('error!')
+    try:
+        files = split_list(files, all_proc)
 
-    files = split_list(files, all_proc)
+        ray_worker_ids = []
+    
+    # for w_idx in range(all_proc):
+    #     # ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
+    #     ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
 
-    ray_worker_ids = []
-    for w_idx in range(all_proc):
-        # ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
-        ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
+    # # results = ray.get(ray_worker_ids)
+
+    # if args.dataset == 'scannet':
+    #     generate_pkl(args)
+    # else:
+    #     generate_pkl(args)
+        
+    
+        for w_idx in range(all_proc):
+            ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
+            # ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
 
     # results = ray.get(ray_worker_ids)
-    try:
+    
         if args.dataset == 'scannet':
             generate_pkl(args)
         else:

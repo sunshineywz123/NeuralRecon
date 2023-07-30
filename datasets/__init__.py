@@ -11,3 +11,5 @@ def find_dataset_def(dataset_name):
         return getattr(module, "DemoDataset")
     elif dataset_name == 'OmniObject3D':
         return getattr(module, "OmniObject3DDataset")
+    elif dataset_name == 'Colmap':
+        return getattr(module, "ColmapDataset")

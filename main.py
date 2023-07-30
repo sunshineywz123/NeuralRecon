@@ -197,11 +197,13 @@ def train():
         lr_scheduler.step()
         TrainImgLoader.dataset.epoch = epoch_idx
         TrainImgLoader.dataset.tsdf_cashe = {}
+        # import ipdb;ipdb.set_trace()
         # training
         for batch_idx, sample in enumerate(TrainImgLoader):
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
             do_summary = global_step % cfg.SUMMARY_FREQ == 0
             start_time = time.time()
+            # import ipdb;ipdb.set_trace()
             loss, scalar_outputs = train_sample(sample)
             if is_main_process():
                 logger.info(
@@ -244,6 +246,7 @@ def test(from_latest=False):
                 avg_test_scalars = DictAverageMeter()
                 save_mesh_scene = SaveScene(cfg)
                 batch_len = len(TestImgLoader)
+                # import ipdb;ipdb.set_trace()
                 for batch_idx, sample in enumerate(TestImgLoader):
                     for n in sample['fragment']:
                         logger.info(n)
@@ -278,6 +281,7 @@ def train_sample(sample):
     model.train()
     optimizer.zero_grad()
 
+    # import ipdb;ipdb.set_trace()
     outputs, loss_dict = model(sample)
     loss = loss_dict['total_loss']
     loss.backward()

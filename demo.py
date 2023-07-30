@@ -30,7 +30,14 @@ update_config(cfg, args)
 
 if not os.path.exists(os.path.join(cfg.TEST.PATH, 'SyncedPoses.txt')):
     logger.info("First run on this captured data, start the pre-processing...")
-    process_data(cfg.TEST.PATH)
+    import ipdb
+    import sys
+    try:
+        process_data(cfg.TEST.PATH)
+    except:
+        type, value, traceback = sys.exc_info()
+        ipdb.post_mortem(traceback)
+
 else:
     logger.info("Found SyncedPoses.txt, skipping data pre-processing...")
 

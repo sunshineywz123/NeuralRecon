@@ -6,7 +6,8 @@ import cv2
 import json
 from pathlib import Path, PurePath
 import OpenEXR
-
+import pycolmap
+import boxx
 def collate_fn(list_data):
     cam_pose, depth_im, _ = list_data
     # Concatenate all lists
@@ -63,7 +64,6 @@ def load_blender_data(basedir, half_res=False, test_ratio=0.125):
         imgs.append(cv2.imread(fname))
         pose = np.array(frame['transform_matrix'])
         pose[:,1:3] *= -1
-        pose[2, 3] += 1.5
         poses.append(pose)
     imgs = (np.array(imgs) / 255.).astype(np.float32) # keep all 4 channels (RGBA)
     poses = np.array(poses).astype(np.float32)
@@ -95,10 +95,9 @@ def load_blender_data(basedir, half_res=False, test_ratio=0.125):
             imgs_half_res[i] = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
         imgs = imgs_half_res
 
-    # poses[2, 3] += 1.5
     return imgs, poses, render_poses, [H, W, focal], i_split, img_files
 
-class OmniObject3DDataset(torch.utils.data.Dataset):
+class ColmapDataset(torch.utils.data.Dataset):
     """Pytorch Dataset for a single scene. getitem loads individual frames"""
 
     def __init__(self, n_imgs, scene, data_path, max_depth, id_list=None):
@@ -113,13 +112,14 @@ class OmniObject3DDataset(torch.utils.data.Dataset):
             self.id_list = [i for i in range(n_imgs)]
         else:
             self.id_list = id_list
-        _,self.poses,_,[H, W, focal],_,_ = load_blender_data(Path(self.data_path+'/'+self.scene+'/render'), half_res=False)
-        cam_intr = np.eye(3,3)
-        self.cam_intr = cam_intr
-        self.cam_intr[0][0] =  focal
-        self.cam_intr[1][1] =  focal
-        self.cam_intr[0][2] =  H/2
-        self.cam_intr[1][2] =  W/2
+        self.reconstruction = pycolmap.Reconstruction("data/皮卡丘大占比对齐/scans/pikaqiu_001/manhattan")
+
+        intrinsic = self.reconstruction.cameras[1].params
+        self.cam_intr = np.eye(3)
+        self.cam_intr[0][0] =  intrinsic[0]
+        self.cam_intr[1][1] =  intrinsic[0]
+        self.cam_intr[0][2] =  intrinsic[1]
+        self.cam_intr[1][2] =  intrinsic[2]
 
         # import ipdb;ipdb.set_trace()
     def __len__(self):
@@ -131,45 +131,30 @@ class OmniObject3DDataset(torch.utils.data.Dataset):
         Returns:
             dict of meta data and images for a single frame
         """
-        id = self.id_list[id]
-
-        # cam_pose = np.linalg.inv(self.poses[id])
-        cam_pose = self.poses[id]
-        # Read depth image and camera pose
+        id = self.id_list[id]+1
+        
+        image = self.reconstruction.images[id]
+        cam_pose = np.eye(4)
+        P=image.projection_matrix()
         # import ipdb;ipdb.set_trace()
+
+        cam_pose[:3,:]=P
+        cam_pose = np.linalg.inv(cam_pose)
+        # cam_pose[:,1:3] *= -1
         
-        # 打开exr文件
-        exr_file = OpenEXR.InputFile( os.path.join(self.data_path, self.scene, 'render/depths', 'r_'+str(id)+'_depth' +'.exr'))
-        # 获取图像宽度、高度和通道数
-        dw = exr_file.header()['dataWindow']
-        width = dw.max.x - dw.min.x + 1
-        height = dw.max.y - dw.min.y + 1
-        channels = exr_file.header()['channels']
-        
-        # 读取每个通道的数据
-        data = {}
-        for channel in channels:
-            data[channel] = np.frombuffer(exr_file.channel(channel), dtype=np.float32)
-            data[channel] = np.reshape(data[channel], (height, width))
+        depth_im = cv2.imread( os.path.join(self.data_path, self.scene,'depths', image.name),cv2.IMREAD_UNCHANGED)
+        depth_im = depth_im.astype(np.float32)*5/255.0/255.0
 
-        # 关闭exr文件
-        exr_file.close()
-
-        # 打印图像尺寸和通道数
-        print(f"Image size: {width} x {height}")
-        print("Channels:", channels)
-
-        # 打印第一个像素的值
-        for channel, values in data.items():
-            print(f"{channel}: {values[0, 0]}")
-
-        # depth_im = data['R']
-        # depth_im = depth_im/1000  # depth is saved in 16-bit PNG in millimeters
-        depth_im = 1/data['R']
+        # boxx.loga(depth_im)
+        # print("max_depth:")
+        # print(self.max_depth)
         depth_im[depth_im > self.max_depth] = 0
+        # print("after:")
+        # boxx.loga(depth_im)
+       
 
         # Read RGB image
-        color_image = cv2.cvtColor(cv2.imread(os.path.join(self.data_path, self.scene, "render/images", 'r_'+str(id) + ".png")),
+        color_image = cv2.cvtColor(cv2.imread(os.path.join(self.data_path, self.scene,'images', image.name)),
                                    cv2.COLOR_BGR2RGB)
         color_image = cv2.resize(color_image, (depth_im.shape[1], depth_im.shape[0]), interpolation=cv2.INTER_AREA)
 

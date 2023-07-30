@@ -208,6 +208,7 @@ class GRUFusion(nn.Module):
             # delete computational graph to save memory
             self.global_volume[scale] = self.global_volume[scale].detach()
 
+        # import ipdb;ipdb.set_trace()
         batch_size = len(inputs['fragment'])
         interval = 2 ** (self.cfg.N_LAYER - scale - 1)
 
