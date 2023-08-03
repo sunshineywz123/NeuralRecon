@@ -26,7 +26,7 @@ class ScanNetDataset(Dataset):
         self.epoch = None
         self.tsdf_cashe = {}
         self.max_cashe = 100
-
+        # import ipdb;ipdb.set_trace()
     def build_list(self):
         with open(os.path.join(self.datapath, self.tsdf_file, 'fragments_{}.pkl'.format(self.mode)), 'rb') as f:
             metas = pickle.load(f)

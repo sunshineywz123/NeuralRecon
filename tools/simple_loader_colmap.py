@@ -112,7 +112,7 @@ class ColmapDataset(torch.utils.data.Dataset):
             self.id_list = [i for i in range(n_imgs)]
         else:
             self.id_list = id_list
-        self.reconstruction = pycolmap.Reconstruction("data/皮卡丘大占比对齐/scans/pikaqiu_001/manhattan")
+        self.reconstruction = pycolmap.Reconstruction("data/皮卡丘大占比对齐/tkl_model/")
 
         intrinsic = self.reconstruction.cameras[1].params
         self.cam_intr = np.eye(3)
@@ -143,7 +143,7 @@ class ColmapDataset(torch.utils.data.Dataset):
         # cam_pose[:,1:3] *= -1
         
         depth_im = cv2.imread( os.path.join(self.data_path, self.scene,'depths', image.name),cv2.IMREAD_UNCHANGED)
-        depth_im = depth_im.astype(np.float32)*5/255.0/255.0
+        depth_im = depth_im.astype(np.float32)*0.3/255.0/255.0
 
         # boxx.loga(depth_im)
         # print("max_depth:")

@@ -43,6 +43,8 @@ class TSDFVolume:
         # Adjust volume bounds and ensure C-order contiguous
         self._vol_dim = np.round((self._vol_bnds[:, 1] - self._vol_bnds[:, 0]) / self._voxel_size).copy(
             order='C').astype(int)
+        print("self._vol_dim:")
+        print(self._vol_dim)
         self._vol_bnds[:, 1] = self._vol_bnds[:, 0] + self._vol_dim * self._voxel_size
         self._vol_origin = self._vol_bnds[:, 0].copy(order='C').astype(np.float32)
 
@@ -51,6 +53,8 @@ class TSDFVolume:
         # for computing the cumulative moving average of observations per voxel
         self._weight_vol_cpu = np.zeros(self._vol_dim).astype(np.float32)
         self._color_vol_cpu = np.zeros(self._vol_dim).astype(np.float32)
+
+        # use_gpu = False
 
         self.gpu_mode = use_gpu and FUSION_GPU_MODE
 
@@ -227,7 +231,6 @@ class TSDFVolume:
             color_im = color_im.reshape(-1).astype(np.float32)
         else:
             color_im = np.array(0)
-
         if self.gpu_mode:  # GPU mode: integrate voxel volume (calls CUDA kernel)
             for gpu_loop_idx in range(self._n_gpu_loops):
                 self._cuda_integrate(self._tsdf_vol_gpu,
@@ -271,6 +274,7 @@ class TSDFVolume:
             depth_val = np.zeros(pix_x.shape)
             depth_val[valid_pix] = depth_im[pix_y[valid_pix], pix_x[valid_pix]]
 
+            # import ipdb;ipdb.set_trace()
             # Integrate TSDF
             depth_diff = depth_val - pix_z
             valid_pts = np.logical_and(depth_val > 0, depth_diff >= -self._trunc_margin)
@@ -286,19 +290,19 @@ class TSDFVolume:
             self._tsdf_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z] = tsdf_vol_new
 
             # Integrate color
-            old_color = self._color_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z]
-            old_b = np.floor(old_color / self._color_const)
-            old_g = np.floor((old_color - old_b * self._color_const) / 256)
-            old_r = old_color - old_b * self._color_const - old_g * 256
-            new_color = color_im[pix_y[valid_pts], pix_x[valid_pts]]
-            new_b = np.floor(new_color / self._color_const)
-            new_g = np.floor((new_color - new_b * self._color_const) / 256)
-            new_r = new_color - new_b * self._color_const - new_g * 256
-            new_b = np.minimum(255., np.round((w_old * old_b + obs_weight * new_b) / w_new))
-            new_g = np.minimum(255., np.round((w_old * old_g + obs_weight * new_g) / w_new))
-            new_r = np.minimum(255., np.round((w_old * old_r + obs_weight * new_r) / w_new))
-            self._color_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z] = new_b * self._color_const + new_g * 256 + new_r
-
+            # old_color = self._color_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z]
+            # old_b = np.floor(old_color / self._color_const)
+            # old_g = np.floor((old_color - old_b * self._color_const) / 256)
+            # old_r = old_color - old_b * self._color_const - old_g * 256
+            # new_color = color_im[pix_y[valid_pts], pix_x[valid_pts]]
+            # new_b = np.floor(new_color / self._color_const)
+            # new_g = np.floor((new_color - new_b * self._color_const) / 256)
+            # new_r = new_color - new_b * self._color_const - new_g * 256
+            # new_b = np.minimum(255., np.round((w_old * old_b + obs_weight * new_b) / w_new))
+            # new_g = np.minimum(255., np.round((w_old * old_g + obs_weight * new_g) / w_new))
+            # new_r = np.minimum(255., np.round((w_old * old_r + obs_weight * new_r) / w_new))
+            # self._color_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z] = new_b * self._color_const + new_g * 256 + new_r
+            self._color_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z] = 256
     def get_volume(self):
         if self.gpu_mode:
             self.cuda.memcpy_dtoh(self._tsdf_vol_cpu, self._tsdf_vol_gpu)
@@ -312,7 +316,8 @@ class TSDFVolume:
         tsdf_vol, color_vol, weight_vol = self.get_volume()
 
         # Marching cubes
-        verts = measure.marching_cubes_lewiner(tsdf_vol, level=0)[0]
+        # verts = measure.marching_cubes_lewiner(tsdf_vol, level=0)[0]
+        verts = measure.marching_cubes(tsdf_vol, level=0)[0]
         verts_ind = np.round(verts).astype(int)
         verts = verts * self._voxel_size + self._vol_origin
 
@@ -332,7 +337,10 @@ class TSDFVolume:
         """
         tsdf_vol, color_vol, weight_vol = self.get_volume()
 
-        verts, faces, norms, vals = measure.marching_cubes_lewiner(tsdf_vol, level=0)
+        # import ipdb;ipdb.set_trace()
+        # verts, faces, norms, vals = measure.marching_cubes_lewiner(tsdf_vol, level=0)
+        verts, faces, norms, vals = measure.marching_cubes(tsdf_vol, level=0)
+        # verts, faces, norms, vals = measure.marching_cubes(tsdf_vol, level=0.4)
         verts_ind = np.round(verts).astype(int)
         verts = verts * self._voxel_size + self._vol_origin  # voxel grid coordinates to world coordinates
 
@@ -360,6 +368,11 @@ def get_view_frustum(depth_im, cam_intr, cam_pose):
     im_h = depth_im.shape[0]
     im_w = depth_im.shape[1]
     max_depth = np.max(depth_im)
+    # # 第2大数值
+    # depth_im_tmp=depth_im.copy()
+    # depth_im_tmp[depth_im_tmp==depth_im_tmp.max()]=0
+    # max_depth = np.max(depth_im_tmp)
+    # import ipdb;ipdb.set_trace()
     view_frust_pts = np.array([
         (np.array([0, 0, 0, im_w, im_w]) - cam_intr[0, 2]) * np.array([0, max_depth, max_depth, max_depth, max_depth]) /
         cam_intr[0, 0],
