@@ -3,6 +3,7 @@ sys.path.append('.')
 
 import time
 from tools.tsdf_fusion.fusion import *
+from tools.tsdf_fusion.fusion_mesh2sdf import *
 import pickle
 import argparse
 from tqdm import tqdm
@@ -33,10 +34,14 @@ def parse_args():
     #                     help='mask out large depth values since they are noisy')
     parser.add_argument('--max_depth', default=4.1, type=float,
                     help='mask out large depth values since they are noisy')
-    
+    # parser.add_argument('--max_depth', default=0.8, type=float,
+    #             help='mask out large depth values since they are noisy')
+
     parser.add_argument('--num_layers', default=3, type=int)
-    parser.add_argument('--margin', default=3, type=int)
-    parser.add_argument('--voxel_size', default=0.008, type=float)
+    # parser.add_argument('--margin', default=3, type=int)
+    parser.add_argument('--margin', default=1000, type=int)
+    parser.add_argument('--voxel_size', default=0.0008, type=float)
+    # parser.add_argument('--voxel_size', default=0.002, type=float)
     # parser.add_argument('--voxel_size', default=0.04, type=float)
 
     parser.add_argument('--window_size', default=9, type=int)
@@ -91,8 +96,14 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
     print("Initializing voxel volume...")
     tsdf_vol_list = []
     # import ipdb;ipdb.set_trace()
+    print(vol_bnds[:, 0])
+    print(vol_bnds[:, 1])
+    # vol_bnds[:, 0]=[0,0,0]
+    # vol_bnds[:, 0]=[126,0,0]
+    print(args.voxel_size * 2 ** 1)
     for l in range(args.num_layers):
-        tsdf_vol_list.append(TSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
+        # tsdf_vol_list.append(TSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
+        tsdf_vol_list.append(Mesh2SdfTSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
 
     # Loop through RGB-D images and fuse them together
     t0_elapse = time.time()
@@ -261,8 +272,8 @@ def process_with_single_worker(args, scannet_files):
             cam_pose_all.update({id: cam_pose})
             # color_all.update({id: color_image})
 
-        save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=False)
-        # save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=True)
+        # save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=False)
+        save_tsdf_full(args, scene, cam_intr, depth_all, cam_pose_all, color_all, save_mesh=True)
         save_fragment_pkl(args, scene, cam_intr, depth_all, cam_pose_all)
 
 
@@ -349,8 +360,8 @@ if __name__ == "__main__":
         
     
         for w_idx in range(all_proc):
-            ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
-            # ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
+            # ray_worker_ids.append(process_with_single_worker_warpper.remote(args, files[w_idx]))
+            ray_worker_ids.append(process_with_single_worker(args, files[w_idx]))
 
     # results = ray.get(ray_worker_ids)
     
