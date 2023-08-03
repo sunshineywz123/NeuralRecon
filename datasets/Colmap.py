@@ -105,7 +105,7 @@ class ColmapDataset(Dataset):
         self.tsdf_cashe = {}
         self.max_cashe = 100
 
-        self.reconstruction = pycolmap.Reconstruction("data/皮卡丘大占比对齐/scans/pikaqiu_001/manhattan")
+        self.reconstruction = pycolmap.Reconstruction("data/皮卡丘大占比对齐/tkl_model/")
 
         intrinsic = self.reconstruction.cameras[1].params
         self.cam_intr = np.eye(3)
@@ -113,7 +113,7 @@ class ColmapDataset(Dataset):
         self.cam_intr[1][1] =  intrinsic[0]
         self.cam_intr[0][2] =  intrinsic[1]
         self.cam_intr[1][2] =  intrinsic[2]
-        
+        # import ipdb;ipdb.set_trace() 
     def build_list(self):
         with open(os.path.join(self.datapath, self.tsdf_file, 'fragments_{}.pkl'.format(self.mode)), 'rb') as f:
             metas = pickle.load(f)
@@ -173,7 +173,8 @@ class ColmapDataset(Dataset):
 
             depth_im = cv2.imread( os.path.join(self.datapath, self.source_path, meta['scene'], 'depths', image.name),cv2.IMREAD_UNCHANGED)
             depth_im = depth_im.astype(np.float32)*5/255.0/255.0
-            depth_im[depth_im > 3.0] = 0
+            # depth_im[depth_im > 3.0] = 0
+            depth_im[depth_im > 4.1] = 0
             
             depth.append(
                 depth_im
