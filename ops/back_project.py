@@ -57,6 +57,7 @@ def back_project(coords, origin, voxel_size, feats, KRcam):
         features = features.view(n_views, c, -1)
         mask = mask.view(n_views, -1)
         im_z = im_z.view(n_views, -1)
+        # import ipdb;ipdb.set_trace()
         # remove nan
         features[mask.unsqueeze(1).expand(-1, c, -1) == False] = 0
         im_z[mask == False] = 0

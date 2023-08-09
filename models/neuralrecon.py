@@ -73,6 +73,7 @@ class NeuralRecon(nn.Module):
         outputs = {}
         imgs = torch.unbind(inputs['imgs'], 1)
 
+        # import ipdb;ipdb.set_trace()
         # image feature extraction
         # in: images; out: feature maps
         features = [self.backbone2d(self.normalizer(img)) for img in imgs]

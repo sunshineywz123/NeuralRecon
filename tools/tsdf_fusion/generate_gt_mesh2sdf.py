@@ -12,7 +12,7 @@ import torch.multiprocessing
 from tools.simple_loader import *
 from tools.simple_loader_OmniObject3D import *
 from tools.simple_loader_colmap import *
-
+import trimesh
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 import os
@@ -87,6 +87,22 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
         vol_bnds[:, 0] = np.minimum(vol_bnds[:, 0], np.amin(view_frust_pts, axis=1))
         vol_bnds[:, 1] = np.maximum(vol_bnds[:, 1], np.amax(view_frust_pts, axis=1))
     # import ipdb;ipdb.set_trace()
+    filename='data/皮卡丘大占比对齐/transformed_pcd.ply'
+    
+    mesh = trimesh.load(filename, force='mesh')
+
+    # normalize mesh
+    vertices = mesh.vertices
+    bbmin = vertices.min(0)
+    bbmax = vertices.max(0)
+    mesh_scale=0.8
+    center = (bbmin + bbmax) * 0.5
+    scale = 2.0 * mesh_scale / (bbmax - bbmin).max()
+    # vertices = (vertices - center) * scale
+    size = 128
+    vol_bnds[:, 0] = np.ones(3)*(-0.8) *(1/scale)+center
+    vol_bnds[:, 1] = np.ones(3) *(0.8)*(1/scale)+center 
+    args.voxel_size = (1.6/scale)/size
     # ======================================================================================================== #
 
     # ======================================================================================================== #
@@ -98,14 +114,15 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
     # import ipdb;ipdb.set_trace()
     print(vol_bnds[:, 0])
     print(vol_bnds[:, 1])
-    vol_bnds[:, 0]=[0,0,0]
-    vol_bnds[:, 1]=[128,128,128]
-    args.voxel_size = 1
+    # vol_bnds[:, 0]=[0,0,0]
+    # vol_bnds[:, 1]=[128,128,128]
+    # args.voxel_size = 1
     print(args.voxel_size * 2 ** 1)
+    print(args.voxel_size)
     for l in range(args.num_layers):
         # tsdf_vol_list.append(TSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
-        tsdf_vol_list.append(Mesh2SdfTSDFVolume(vol_bnds, voxel_size=args.voxel_size , margin=args.margin))
-
+        tsdf_vol_list.append(Mesh2SdfTSDFVolume(vol_bnds, voxel_size=args.voxel_size * 2 ** l, margin=args.margin))
+    import ipdb;ipdb.set_trace()
     # Loop through RGB-D images and fuse them together
     t0_elapse = time.time()
     for id in depth_list.keys():

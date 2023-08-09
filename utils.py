@@ -218,7 +218,8 @@ class SaveScene(object):
 
     @staticmethod
     def tsdf2mesh(voxel_size, origin, tsdf_vol):
-        verts, faces, norms, vals = measure.marching_cubes(tsdf_vol, level=0)
+        # verts, faces, norms, vals = measure.marching_cubes(tsdf_vol, level=0)
+        verts, faces, norms, vals = measure.marching_cubes(tsdf_vol, level=2/128)
         verts = verts * voxel_size + origin  # voxel grid coordinates to world coordinates
         mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=norms)
         return mesh

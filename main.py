@@ -16,7 +16,8 @@ from models import NeuralRecon
 from config import cfg, update_config
 from datasets.sampler import DistributedSampler
 from ops.comm import *
-
+import sys 
+import ipdb
 
 def args():
     parser = argparse.ArgumentParser(description='A PyTorch Implementation of NeuralRecon')
@@ -234,6 +235,7 @@ def test(from_latest=False):
             saved_models = saved_models[-1:]
         for ckpt in saved_models:
             if ckpt not in ckpt_list:
+                # ckpt = "model_000143.ckpt"
                 # use the latest checkpoint file
                 loadckpt = os.path.join(cfg.LOGDIR, ckpt)
                 logger.info("resuming " + str(loadckpt))
@@ -246,6 +248,7 @@ def test(from_latest=False):
                 avg_test_scalars = DictAverageMeter()
                 save_mesh_scene = SaveScene(cfg)
                 batch_len = len(TestImgLoader)
+                # ipdb.set_trace()
                 # import ipdb;ipdb.set_trace()
                 for batch_idx, sample in enumerate(TestImgLoader):
                     for n in sample['fragment']:
@@ -273,7 +276,7 @@ def test(from_latest=False):
                 logger.info("epoch {} avg_test_scalars:".format(epoch_idx), avg_test_scalars.mean())
 
                 ckpt_list.append(ckpt)
-
+            break
         time.sleep(10)
 
 
@@ -301,7 +304,11 @@ def test_sample(sample, save_scene=False):
 
 
 if __name__ == '__main__':
-    if cfg.MODE == "train":
-        train()
-    elif cfg.MODE == "test":
-        test()
+    try:
+        if cfg.MODE == "train":
+            train()
+        elif cfg.MODE == "test":
+            test()
+    except:
+        type, value, traceback = sys.exc_info()
+        ipdb.post_mortem(traceback)

@@ -60,9 +60,9 @@ def load_blender_data(basedir, half_res=False, test_ratio=0.125):
     i_val = i_test = np.arange(0, n_images, freq_test)
     i_train = np.asarray(list(set(np.arange(n_images).tolist())-set(i_test.tolist())))
     i_split = [i_train, i_val, i_test]
-    print('TRAIN views are', i_train)
-    print('VAL views are', i_val)
-    print('TEST views are', i_test)
+    # print('TRAIN views are', i_train)
+    # print('VAL views are', i_val)
+    # print('TEST views are', i_test)
 
     H, W = imgs[0].shape[:2]
     camera_angle_x = float(meta['camera_angle_x'])

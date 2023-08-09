@@ -1,27 +1,27 @@
-DATASET: 'Colmap'
+DATASET: 'scannet'
 BATCH_SIZE: 1
-SAVE_SCENE_MESH: True
+SAVE_SCENE_MESH: False
 LOGDIR: './checkpoints'
 SAVE_FREQ: 1
-MODE: 'test'
+MODE: 'train'
 
 TRAIN:
-  PATH: 'data/皮卡丘大占比对齐'
+  PATH: 'data/scannet/'
   EPOCHS: 991
   N_VIEWS: 9
   LR: 1e-3
-  N_WORKERS: 8
+  N_WORKERS: 64
   LREPOCHS: '12,24,48:2'
 
 TEST:
-  PATH: 'data/皮卡丘大占比对齐'
+  PATH: 'data/scannet/'
   N_VIEWS: 9
   N_WORKERS: 4
 
 MODEL:
   N_LAYER: 3
-  N_VOX: [128, 128, 128]
-  VOXEL_SIZE: 0.0007532593735959381
+  N_VOX: [96, 96, 96]
+  VOXEL_SIZE: 0.008
   TRAIN_NUM_SAMPLE: [4096, 16384, 65536]
   TEST_NUM_SAMPLE: [4096, 16384, 65536]
 

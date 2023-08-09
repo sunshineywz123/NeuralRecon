@@ -11,7 +11,7 @@ from .gru_fusion import GRUFusion
 from ops.back_project import back_project
 from ops.generate_grids import generate_grid
 
-
+import boxx
 class NeuConNet(nn.Module):
     '''
     Coarse-to-fine network.
@@ -126,10 +126,14 @@ class NeuConNet(nn.Module):
             # ----back project----
             feats = torch.stack([feat[scale] for feat in features])
             KRcam = inputs['proj_matrices'][:, :, scale].permute(1, 0, 2, 3).contiguous()
+            # import ipdb;ipdb.set_trace()
             volume, count = back_project(up_coords, inputs['vol_origin_partial'], self.cfg.VOXEL_SIZE, feats,
                                          KRcam)
             grid_mask = count > 1
-
+            # logger.warning(volume)
+            # logger.warning(inputs['vol_origin_partial'])
+            # logger.warning(self.cfg.VOXEL_SIZE)
+            # logger.warning(feats)
             # ----concat feature from last stage----
             if i != 0:
                 feat = torch.cat([volume, up_feat], dim=1)
@@ -165,6 +169,7 @@ class NeuConNet(nn.Module):
             tsdf = self.tsdf_preds[i](feat)
             occ = self.occ_preds[i](feat)
 
+            # import ipdb;ipdb.set_trace()
             # -------compute loss-------
             if tsdf_target is not None:
                 loss = self.compute_loss(tsdf, occ, tsdf_target, occ_target,
@@ -186,6 +191,7 @@ class NeuConNet(nn.Module):
 
             # ------avoid out of memory: sample points if num of points is too large-----
             if self.training and num > self.cfg.TRAIN_NUM_SAMPLE[i] * bs:
+            # if num > self.cfg.TRAIN_NUM_SAMPLE[i] * bs:
                 choice = np.random.choice(num, num - self.cfg.TRAIN_NUM_SAMPLE[i] * bs,
                                           replace=False)
                 ind = torch.nonzero(occupancy)

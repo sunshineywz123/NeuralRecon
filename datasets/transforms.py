@@ -24,7 +24,7 @@ from utils import coordinates
 import transforms3d
 import torch
 from tools.tsdf_fusion.fusion import TSDFVolumeTorch
-
+import trimesh
 
 class Compose(object):
     """ Apply a list of transforms sequentially"""
@@ -84,6 +84,40 @@ class IntrinsicsPoseToProjection(object):
             for i in range(3):
                 # from (camera to world) to (world to camera)
                 proj_mat = torch.inverse(extrinsics.data.cpu())
+                if 1:
+                    filename = "./data/皮卡丘大占比对齐/transformed_pcd.ply"
+
+                    size = 128/(i+1)
+                    level = 2 / size
+                    mesh_scale = 0.8
+                    mesh = trimesh.load(filename, force='mesh')
+
+                    # normalize mesh
+                    vertices = mesh.vertices
+                    bbmin = vertices.min(0)
+                    bbmax = vertices.max(0)
+                    center = (bbmin + bbmax) * 0.5
+
+
+                    scale = (2.0 * mesh_scale / (bbmax - bbmin).max())
+
+                    translation_oo2on = -center
+                    scale_oo2on = scale
+                    scale_mat = np.eye(4)
+                    scale_mat[:3, -1] = translation_oo2on
+                    scale_mat[:3, :] *= scale_oo2on
+
+                    center1 = np.array([-1,-1,-1])
+                    scale1=size/2
+                    translation_oo2on = -center1
+                    scale_oo2on = scale1
+                    scale_mat1 = np.eye(4)
+                    scale_mat1[:3, -1] = translation_oo2on
+                    scale_mat1[:3, :] *= scale_oo2on
+
+                    scale_mat2 = scale_mat1@scale_mat
+
+                    proj_mat = proj_mat @ torch.from_numpy(np.linalg.inv(scale_mat2)).type(torch.float32)
                 scale_intrinsics = intrinsics / self.stride / 2 ** i
                 scale_intrinsics[-1, -1] = 1
                 proj_mat[:3, :4] = scale_intrinsics @ proj_mat[:3, :4]
@@ -258,7 +292,24 @@ class RandomTransformSpace(object):
             view_frust_pts = get_view_frustum(self.max_depth, size, cam_intr, cam_pose)
             bnds[:, 0] = torch.min(bnds[:, 0], torch.min(view_frust_pts, dim=1)[0])
             bnds[:, 1] = torch.max(bnds[:, 1], torch.max(view_frust_pts, dim=1)[0])
+        Colmap =True
+        if Colmap:
+            filename='data/皮卡丘大占比对齐/transformed_pcd.ply'
+        else:
+            filename='data/antique/scans/antique_004/Scan/Scan.obj'
+        mesh = trimesh.load(filename, force='mesh')
 
+        # normalize mesh
+        vertices = mesh.vertices
+        bbmin = vertices.min(0)
+        bbmax = vertices.max(0)
+        mesh_scale=0.8
+        center = (bbmin + bbmax) * 0.5
+        scale = 2.0 * mesh_scale / (bbmax - bbmin).max()
+        # vertices = (vertices - center) * scale
+        size = 128
+        bnds[:, 0] = torch.tensor(np.ones(3)*(-0.8) *(1/scale)+center)
+        bnds[:, 1] = torch.tensor(np.ones(3) *(0.8)*(1/scale)+center)
         # -------adjust volume bounds-------
         num_layers = 3
         center = (torch.tensor(((bnds[0, 1] + bnds[0, 0]) / 2, (bnds[1, 1] + bnds[1, 0]) / 2, -0.2)) - data[
@@ -290,47 +341,55 @@ class RandomTransformSpace(object):
             for l, tsdf_s in enumerate(data['tsdf_list_full']):
                 # ------get partial tsdf and occ-------
                 vol_dim_s = torch.tensor(self.voxel_dim) // 2 ** l
-                tsdf_vol = TSDFVolumeTorch(vol_dim_s, vol_origin_partial,
-                                           voxel_size=self.voxel_size * 2 ** l, margin=3)
-                for i in range(data['imgs'].shape[0]):
-                    depth_im = data['depth'][i]
-                    cam_intr = data['intrinsics'][i]
-                    cam_pose = data['extrinsics'][i]
+                # tsdf_vol = TSDFVolumeTorch(vol_dim_s, vol_origin_partial,
+                #                            voxel_size=self.voxel_size * 2 ** l, margin=3)
+                # for i in range(data['imgs'].shape[0]):
+                #     depth_im = data['depth'][i]
+                #     cam_intr = data['intrinsics'][i]
+                #     cam_pose = data['extrinsics'][i]
 
-                    tsdf_vol.integrate(depth_im, cam_intr, cam_pose, obs_weight=1.)
+                #     tsdf_vol.integrate(depth_im, cam_intr, cam_pose, obs_weight=1.)
 
-                tsdf_vol, weight_vol = tsdf_vol.get_volume()
+                if 1:
+                    sdf = np.load('data/皮卡丘大占比对齐/transformed_pcd.npy')
+                    gap = int((sdf.shape/vol_dim_s.numpy())[0])
+
+                    tsdf_vol = torch.tensor(sdf[::gap, ::gap, ::gap])
+                # occ_vol = torch.zeros_like(torch.tensor(tsdf_vol)).bool()
+                # occ_vol[(tsdf_vol < 0.999) & (tsdf_vol > -0.999) & (weight_vol > 1)] = True
+                else:
+                    tsdf_vol, weight_vol = tsdf_vol.get_volume()
                 occ_vol = torch.zeros_like(tsdf_vol).bool()
-                occ_vol[(tsdf_vol < 0.999) & (tsdf_vol > -0.999) & (weight_vol > 1)] = True
+                occ_vol[(tsdf_vol < 0.999) & (tsdf_vol > -0.999) ] = True
 
-                # grid sample expects coords in [-1,1]
-                coords_world_s = coords.view(3, x, y, z)[:, ::2 ** l, ::2 ** l, ::2 ** l] / 2 ** l
-                dim_s = list(coords_world_s.shape[1:])
-                coords_world_s = coords_world_s.view(3, -1)
+                # # grid sample expects coords in [-1,1]
+                # coords_world_s = coords.view(3, x, y, z)[:, ::2 ** l, ::2 ** l, ::2 ** l] / 2 ** l
+                # dim_s = list(coords_world_s.shape[1:])
+                # coords_world_s = coords_world_s.view(3, -1)
 
-                old_voxel_dim = list(tsdf_s.shape)
+                # old_voxel_dim = list(tsdf_s.shape)
 
-                coords_world_s = 2 * coords_world_s / (torch.Tensor(old_voxel_dim) - 1).view(3, 1) - 1
-                coords_world_s = coords_world_s[[2, 1, 0]].T.view([1] + dim_s + [3])
+                # coords_world_s = 2 * coords_world_s / (torch.Tensor(old_voxel_dim) - 1).view(3, 1) - 1
+                # coords_world_s = coords_world_s[[2, 1, 0]].T.view([1] + dim_s + [3])
 
-                # bilinear interpolation near surface,
-                # no interpolation along -1,1 boundry
-                tsdf_vol = torch.nn.functional.grid_sample(
-                    tsdf_s.view([1, 1] + old_voxel_dim),
-                    coords_world_s, mode='nearest', align_corners=align_corners
-                ).squeeze()
-                tsdf_vol_bilin = torch.nn.functional.grid_sample(
-                    tsdf_s.view([1, 1] + old_voxel_dim), coords_world_s, mode='bilinear',
-                    align_corners=align_corners
-                ).squeeze()
-                mask = tsdf_vol.abs() < 1
-                tsdf_vol[mask] = tsdf_vol_bilin[mask]
+                # # bilinear interpolation near surface,
+                # # no interpolation along -1,1 boundry
+                # tsdf_vol = torch.nn.functional.grid_sample(
+                #     tsdf_s.view([1, 1] + old_voxel_dim),
+                #     coords_world_s, mode='nearest', align_corners=align_corners
+                # ).squeeze()
+                # tsdf_vol_bilin = torch.nn.functional.grid_sample(
+                #     tsdf_s.view([1, 1] + old_voxel_dim), coords_world_s, mode='bilinear',
+                #     align_corners=align_corners
+                # ).squeeze()
+                # mask = tsdf_vol.abs() < 1
+                # tsdf_vol[mask] = tsdf_vol_bilin[mask]
 
-                # padding_mode='ones' does not exist for grid_sample so replace
-                # elements that were on the boarder with 1.
-                # voxels beyond full volume (prior to croping) should be marked as empty
-                mask = (coords_world_s.abs() >= 1).squeeze(0).any(3)
-                tsdf_vol[mask] = 1
+                # # padding_mode='ones' does not exist for grid_sample so replace
+                # # elements that were on the boarder with 1.
+                # # voxels beyond full volume (prior to croping) should be marked as empty
+                # mask = (coords_world_s.abs() >= 1).squeeze(0).any(3)
+                # tsdf_vol[mask] = 1
 
                 data['tsdf_list'].append(tsdf_vol)
                 data['occ_list'].append(occ_vol)

@@ -63,7 +63,7 @@ def load_blender_data(basedir, half_res=False, test_ratio=0.125):
         imgs.append(cv2.imread(fname))
         pose = np.array(frame['transform_matrix'])
         pose[:,1:3] *= -1
-        pose[2, 3] += 1.5
+        # pose[2, 3] += 1.5
         poses.append(pose)
     imgs = (np.array(imgs) / 255.).astype(np.float32) # keep all 4 channels (RGBA)
     poses = np.array(poses).astype(np.float32)
@@ -120,7 +120,12 @@ class OmniObject3DDataset(torch.utils.data.Dataset):
         self.cam_intr[1][1] =  focal
         self.cam_intr[0][2] =  H/2
         self.cam_intr[1][2] =  W/2
+        # translations = self.poses[:, :3, 3]
 
+        # 计算平均旋转矩阵和平均平移向量
+
+        # avg_translation = np.mean(translations, axis=0)
+    
         # import ipdb;ipdb.set_trace()
     def __len__(self):
         return self.n_imgs

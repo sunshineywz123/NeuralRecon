@@ -21,6 +21,8 @@ from fusion import meshwrite
 import ipdb
 import sys
 
+import trimesh
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Fuse ground truth tsdf')
     parser.add_argument("--dataset", default='OmniObject3D')
@@ -87,6 +89,7 @@ def save_tsdf_full(args, scene_path, cam_intr, depth_list, cam_pose_list, color_
         vol_bnds[:, 0] = np.minimum(vol_bnds[:, 0], np.amin(view_frust_pts, axis=1))
         vol_bnds[:, 1] = np.maximum(vol_bnds[:, 1], np.amax(view_frust_pts, axis=1))
     # import ipdb;ipdb.set_trace()
+
     # ======================================================================================================== #
 
     # ======================================================================================================== #

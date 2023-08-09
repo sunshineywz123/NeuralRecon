@@ -11,8 +11,9 @@ from utils import SaveScene
 from config import cfg, update_config
 from datasets import find_dataset_def, transforms
 from tools.process_arkit_data import process_data
-
-
+import sys
+import ipdb
+import boxx
 parser = argparse.ArgumentParser(description='NeuralRecon Real-time Demo')
 parser.add_argument('--cfg',
                     help='experiment configure file name',
@@ -30,8 +31,6 @@ update_config(cfg, args)
 
 if not os.path.exists(os.path.join(cfg.TEST.PATH, 'SyncedPoses.txt')):
     logger.info("First run on this captured data, start the pre-processing...")
-    import ipdb
-    import sys
     try:
         process_data(cfg.TEST.PATH)
     except:
@@ -83,6 +82,10 @@ with torch.no_grad():
         outputs, loss_dict = model(sample, save_scene)
         duration += time.time() - start_time
 
+        logger.info("outputs")
+        boxx.loga(outputs['tsdf'])
+        # import ipdb;ipdb.set_trace()
+        
         if cfg.REDUCE_GPU_MEM:
             # will slow down the inference
             torch.cuda.empty_cache()
@@ -105,8 +108,11 @@ with torch.no_grad():
                 2. Extremely difficult scene.
                 If you can run with the demo data without any problem, please submit a issue with the failed data attatched, thanks!
             """
-            save_mesh_scene.save_scene_eval(epoch_idx, outputs)
-        
+            try:
+                save_mesh_scene.save_scene_eval(epoch_idx, outputs)
+            except:
+               type, value, traceback = sys.exc_info()
+               ipdb.post_mortem(traceback)
         gpu_mem_usage.append(torch.cuda.memory_reserved())
         
 summary_text = f"""

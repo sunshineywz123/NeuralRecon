@@ -5,7 +5,13 @@ import numpy as np
 from numba import njit, prange
 from skimage import measure
 import torch
-
+import os
+import sys
+import trimesh
+import mesh2sdf
+import numpy as np
+import time
+import skimage.measure
 
 class Mesh2SdfTSDFVolume:
     """Volumetric TSDF Fusion of RGB-D Images.
@@ -43,6 +49,7 @@ class Mesh2SdfTSDFVolume:
         # Adjust volume bounds and ensure C-order contiguous
         self._vol_dim = np.round((self._vol_bnds[:, 1] - self._vol_bnds[:, 0]) / self._voxel_size).copy(
             order='C').astype(int)
+        # self._vol_dim = np.array([128,128,128])
         print("self._vol_dim:")
         print(self._vol_dim)
         self._vol_bnds[:, 1] = self._vol_bnds[:, 0] + self._vol_dim * self._voxel_size
@@ -278,8 +285,13 @@ class Mesh2SdfTSDFVolume:
             # Integrate TSDF
             # x,y,z 
             # self._tsdf_vol_cpu[valid_vox_x, valid_vox_y, valid_vox_z] = sdf[x,y,z]
+            # 通过切片操作按照步长2取值，得到大小为64x64x64的数组
             sdf = np.load('data/皮卡丘大占比对齐/transformed_pcd.npy')
-            self._tsdf_vol_cpu = sdf
+            gap = int((sdf.shape/self._vol_dim)[0])
+            self._tsdf_vol_cpu = sdf[::gap, ::gap, ::gap]
+
+            # print(self._tsdf_vol_cpu.shape)  # 输出 (64, 64, 64)
+
             # depth_diff = depth_val - pix_z
             # valid_pts = np.logical_and(depth_val > 0, depth_diff >= -self._trunc_margin)
             # dist = np.minimum(1, depth_diff / self._trunc_margin)
@@ -564,20 +576,50 @@ class TSDFVolumeTorch:
         cam_intr = cam_intr.float().to(self.device)
         depth_im = depth_im.float().to(self.device)
         im_h, im_w = depth_im.shape
-        weight_vol, tsdf_vol = self._integrate_func(
-            depth_im,
-            cam_intr,
-            cam_pose,
-            obs_weight,
-            self._world_c,
-            self._vox_coords,
-            self._weight_vol,
-            self._tsdf_vol,
-            self._sdf_trunc,
-            im_h, im_w,
-        )
-        self._weight_vol = weight_vol
-        self._tsdf_vol = tsdf_vol
+        # weight_vol, tsdf_vol = self._integrate_func(
+        #     depth_im,
+        #     cam_intr,
+        #     cam_pose,
+        #     obs_weight,
+        #     self._world_c,
+        #     self._vox_coords,
+        #     self._weight_vol,
+        #     self._tsdf_vol,
+        #     self._sdf_trunc,
+        #     im_h, im_w,
+        # )
+        
+        Colmap=1
+        sdf = []
+        if Colmap:
+            sdf = np.load('data/皮卡丘大占比对齐/transformed_pcd.npy')
+        else:
+            mesh_scale = 0.8
+            size = 128
+            level = 2 / size
+            filename='data/antique/scans/antique_004/Scan/Scan.obj'
+            mesh = trimesh.load(filename, force='mesh')
+
+            # normalize mesh
+            vertices = mesh.vertices
+            bbmin = vertices.min(0)
+            bbmax = vertices.max(0)
+            center = (bbmin + bbmax) * 0.5
+            scale = 2.0 * mesh_scale / (bbmax - bbmin).max()
+            vertices = (vertices - center) * scale
+
+            # fix mesh
+            t0 = time.time()
+            sdf, mesh = mesh2sdf.compute(
+                vertices, mesh.faces, size, fix=True, level=level, return_mesh=True)
+            t1 = time.time()
+            print('It takes %.4f seconds to process' % (t1-t0))
+            
+        gap = int((sdf.shape/self._vol_dim)[0])
+        # self._tsdf_vol_cpu = sdf[::gap, ::gap, ::gap]
+    
+        # self._weight_vol = weight_vol
+        self._tsdf_vol = torch.tensor(sdf[::gap, ::gap, ::gap])
 
     def get_volume(self):
         return self._tsdf_vol, self._weight_vol
