@@ -6,7 +6,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import torch
 import json
-import OpenEXR
+# import OpenEXR
 from pathlib import Path, PurePath
 import cv2
 import pycolmap
@@ -110,9 +110,9 @@ class ColmapDataset(Dataset):
         intrinsic = self.reconstruction.cameras[1].params
         self.cam_intr = np.eye(3)
         self.cam_intr[0][0] =  intrinsic[0]
-        self.cam_intr[1][1] =  intrinsic[0]
-        self.cam_intr[0][2] =  intrinsic[1]
-        self.cam_intr[1][2] =  intrinsic[2]
+        self.cam_intr[1][1] =  intrinsic[1]
+        self.cam_intr[0][2] =  intrinsic[2]
+        self.cam_intr[1][2] =  intrinsic[3]
         # import ipdb;ipdb.set_trace()
     def build_list(self):
         with open(os.path.join(self.datapath, self.tsdf_file, 'fragments_{}.pkl'.format(self.mode)), 'rb') as f:
@@ -167,12 +167,19 @@ class ColmapDataset(Dataset):
         for i, vid in enumerate(meta['image_ids']):
             image = self.reconstruction.images[vid+1]
             # load images
+            img = self.read_img(
+                    os.path.join(self.datapath, self.source_path, meta['scene'], 'images', image.name))
+            img_arr = np.asarray(img)
+            img_bgr = img_arr[:, :, ::-1] 
+
+            img_bgr = Image.fromarray(img_bgr)
             imgs.append(
-                self.read_img(
-                    os.path.join(self.datapath, self.source_path, meta['scene'], 'images', image.name)))
+                img_bgr
+            )
+            
 
             depth_im = cv2.imread( os.path.join(self.datapath, self.source_path, meta['scene'], 'depths', image.name),cv2.IMREAD_UNCHANGED)
-            depth_im = depth_im.astype(np.float32)*5/255.0/255.0
+            depth_im = depth_im.astype(np.float32)*0.3/255.0/255.0
             depth_im[depth_im > 3.0] = 0
             
             depth.append(
